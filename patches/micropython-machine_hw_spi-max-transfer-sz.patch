@@ -1,0 +1,13 @@
+diff --git a/ports/esp32/machine_hw_spi.c b/ports/esp32/machine_hw_spi.c
+index f2b47a0..199c6fe 100644
+--- a/ports/esp32/machine_hw_spi.c
++++ b/ports/esp32/machine_hw_spi.c
+@@ -251,7 +251,7 @@ static void machine_hw_spi_init_internal(machine_hw_spi_obj_t *self, mp_arg_val_
+         .mode = self->phase | (self->polarity << 1),
+         .spics_io_num = -1, // No CS pin
+         .queue_size = 2,
+-        .flags = self->firstbit == MICROPY_PY_MACHINE_SPI_LSB ? SPI_DEVICE_TXBIT_LSBFIRST | SPI_DEVICE_RXBIT_LSBFIRST : 0,
++        .flags = (self->firstbit == MICROPY_PY_MACHINE_SPI_LSB ? SPI_DEVICE_TXBIT_LSBFIRST | SPI_DEVICE_RXBIT_LSBFIRST : 0) | SPI_DEVICE_NO_DUMMY,
+         .pre_cb = NULL
+     };
+ 

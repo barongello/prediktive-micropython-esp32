@@ -1,0 +1,14 @@
+diff --git a/ports/esp32/machine_hw_spi.c b/ports/esp32/machine_hw_spi.c
+index f2b47a0..a082e8e 100644
+--- a/ports/esp32/machine_hw_spi.c
++++ b/ports/esp32/machine_hw_spi.c
+@@ -243,7 +243,8 @@ static void machine_hw_spi_init_internal(machine_hw_spi_obj_t *self, mp_arg_val_
+         .mosi_io_num = self->mosi,
+         .sclk_io_num = self->sck,
+         .quadwp_io_num = -1,
+-        .quadhd_io_num = -1
++        .quadhd_io_num = -1,
++        .max_transfer_sz = 320 * 240 * 2 + 8
+     };
+ 
+     spi_device_interface_config_t devcfg = {
