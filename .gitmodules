@@ -6,3 +6,7 @@
 	path = deps/micropython
 	url = https://github.com/micropython/micropython.git
 	shallow = true
+[submodule "deps/micropython-camera"]
+	path = deps/micropython-camera
+	url = https://github.com/cnadler86/micropython-camera-API.git
+	shallow = true
