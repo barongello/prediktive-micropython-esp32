@@ -2,3 +2,7 @@
 	path = deps/esp-idf
 	url = https://github.com/espressif/esp-idf.git
 	shallow = true
+[submodule "deps/micropython"]
+	path = deps/micropython
+	url = https://github.com/micropython/micropython.git
+	shallow = true
