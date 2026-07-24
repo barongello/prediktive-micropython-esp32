@@ -1,0 +1,13 @@
+diff --git a/st7789/st7789.c b/st7789/st7789.c
+index f314397..27282d4 100644
+--- a/st7789/st7789.c
++++ b/st7789/st7789.c
+@@ -524,7 +524,7 @@ static mp_obj_t st7789_ST7789_blit_buffer(size_t n_args, const mp_obj_t *args) {
+     DC_HIGH();
+     CS_LOW();
+ 
+-    const int buf_size = 256;
++    const int buf_size = 320 * 240 * 2;
+     int limit = MIN(buf_info.len, w * h * 2);
+     int chunks = limit / buf_size;
+     int rest = limit % buf_size;
