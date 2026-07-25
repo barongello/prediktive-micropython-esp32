@@ -2,6 +2,8 @@ import time
 from machine import Pin, SPI
 from camera import Camera, FrameSize, PixelFormat
 import st7789
+import vga1_8x16
+import vga2_8x16
 
 print('Initializing ST7789 display...')
 
@@ -25,9 +27,7 @@ display = st7789.ST7789(
 
 display.init()
 
-BLACK = st7789.color565(0, 0, 0)
-
-display.fill(BLACK)
+display.fill(st7789.BLACK)
 
 print('Initializing camera...')
 
@@ -45,7 +45,25 @@ except Exception as e:
 if cam:
     print('Starting real time video streaming...')
 
+    fps = 0
+    fps_frames = 0
+    fps_timer = 0
+    fps_last_frame_time = time.ticks_us()
+
     while True:
+        fps_now = time.ticks_us()
+        fps_dt = fps_now - fps_last_frame_time
+        fps_last_frame_time = fps_now
+
+        fps_frames += 1
+        fps_timer += fps_dt
+        
+        if fps_timer >= 1000:
+            fps = fps_frames * 1000000 / fps_timer
+
+            fps_frames = 0
+            fps_timer = 0
+
         try:
             t0 = time.ticks_us()
 
@@ -58,9 +76,11 @@ if cam:
 
                 t2 = time.ticks_us()
 
-                print('capture: {} ms | blit: {} ms'.format(
+                print('capture: {} ms | blit: {} ms | frame time: {} ms | fps: {}'.format(
                     time.ticks_diff(t1, t0) / 1000,
-                    time.ticks_diff(t2, t1) / 1000
+                    time.ticks_diff(t2, t1) / 1000,
+                    fps_dt / 1000,
+                    fps
                 ))
             else:
                 print('Warning: Empty image buffer')
@@ -72,3 +92,6 @@ if cam:
             print('Error in video loop:', e)
 
             time.sleep(0.5)
+
+        display.text(vga1_8x16, 'FPS: ', 10, 10, st7789.BLACK, st7789.WHITE)
+        display.text(vga2_8x16, '{}'.format(fps), 50, 10, st7789.BLACK, st7789.WHITE)

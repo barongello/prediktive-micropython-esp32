@@ -118,6 +118,39 @@ static mp_obj_t st7789_ST7789_blit_buffer(size_t n_args, const mp_obj_t *args) {
 }
 ```
 
+## Third party modules and frozen modules
+
+Since we rely on two third party modules (camera and ST7789), we need to add both to the CMake process. Let's create a `combined_modules.cmake` file in the root folder and pass it as `USER_C_MODULES` when compiling
+
+```cmake
+include(${CMAKE_CURRENT_LIST_DIR}/deps/micropython-camera/micropython.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/deps/micropython-st7789/st7789/micropython.cmake)
+```
+
+For the frozen Python modules, we will be including the two vga fonts from the ST7789, so we need to also to create a `manifest.py` and pass it as `MICROPY_FROZEN_MANIFEST` when compiling
+
+Here we need to take care, the camera module's CMake file sets this compile variable, overriding any `-D MICROPY_FROZEN_MANIFEST` passed at the compile command
+
+To ensure everything will work fine, we will create our `manifest.py` including the default board manifest, the camera's manifest and our desired files
+
+```python
+include('$(PORT_DIR)/boards/manifest.py')
+include('deps/micropython-camera/manifest.py')
+
+freeze(
+    'deps/micropython-st7789/fonts/bitmap',
+    ('vga1_8x16.py', 'vga2_8x16.py')
+)
+```
+
+Then we will update our `combined_modules.cmake` to set the `MICROPY_FROZEN_MANIFEST` with `CACHE STRING "" FORCE` to ensure that this variable will not be override
+
+```cmake
+set(MICROPY_FROZEN_MANIFEST ${CMAKE_CURRENT_LIST_DIR}/manifest.py CACHE STRING "" FORCE)
+```
+
+From now onward, all other modules added to the project will need to have their `manifest.py` included in our main `manifest.py`, otherwise they will not have their frozen modules included
+
 ## Compile the firmware
 
 ```bash
@@ -164,6 +197,8 @@ import time
 from machine import Pin, SPI
 from camera import Camera, FrameSize, PixelFormat
 import st7789
+import vga1_8x16
+import vga2_8x16
 
 print('Initializing ST7789 display...')
 
@@ -187,9 +222,7 @@ display = st7789.ST7789(
 
 display.init()
 
-BLACK = st7789.color565(0, 0, 0)
-
-display.fill(BLACK)
+display.fill(st7789.BLACK)
 
 print('Initializing camera...')
 
@@ -207,7 +240,25 @@ except Exception as e:
 if cam:
     print('Starting real time video streaming...')
 
+    fps = 0
+    fps_frames = 0
+    fps_timer = 0
+    fps_last_frame_time = time.ticks_us()
+
     while True:
+        fps_now = time.ticks_us()
+        fps_dt = fps_now - fps_last_frame_time
+        fps_last_frame_time = fps_now
+
+        fps_frames += 1
+        fps_timer += fps_dt
+        
+        if fps_timer >= 1000:
+            fps = fps_frames * 1000000 / fps_timer
+
+            fps_frames = 0
+            fps_timer = 0
+
         try:
             t0 = time.ticks_us()
 
@@ -220,9 +271,11 @@ if cam:
 
                 t2 = time.ticks_us()
 
-                print('capture: {} ms | blit: {} ms'.format(
+                print('capture: {} ms | blit: {} ms | frame time: {} ms | fps: {}'.format(
                     time.ticks_diff(t1, t0) / 1000,
-                    time.ticks_diff(t2, t1) / 1000
+                    time.ticks_diff(t2, t1) / 1000,
+                    fps_dt / 1000,
+                    fps
                 ))
             else:
                 print('Warning: Empty image buffer')
@@ -234,7 +287,14 @@ if cam:
             print('Error in video loop:', e)
 
             time.sleep(0.5)
+
+        display.text(vga1_8x16, 'FPS: ', 10, 10, st7789.BLACK, st7789.WHITE)
+        display.text(vga2_8x16, '{}'.format(fps), 50, 10, st7789.BLACK, st7789.WHITE)
 ```
+
+We will notice flickering on the FPS text because we are calling `write_spi` three times: the camera buffer, the FPS text and the FPS value
+
+We can fix it drawing directly to the buffer using the `framebuf` module, but it only has an 8x8 bitmap font and will not allow us to use our frozen fonts nor change the background color. If we want to keep using the frozen fonts and the background color, we will need to write the text pixels ourselves
 
 ---
 
@@ -285,3 +345,6 @@ git remote add origin git@github.com:barongello/prediktive-micropython-esp32.git
 
 git push -u origin main
 ```
+
+TODO
+- Update boot.py to write over the screen
