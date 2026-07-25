@@ -2,15 +2,29 @@
 
 set -e
 
+apply_patch() {
+  local patch_file="$1"
+
+  if git apply --check "$patch_file" 2>/dev/null; then
+    git apply "$patch_file"
+    echo "Applied: $patch_file"
+  elif git apply --reverse --check "$patch_file" 2>/dev/null; then
+    echo "Already applied: $patch_file"
+  else
+    echo "ERROR: failed to apply $patch_file" >&2
+    exit 1
+  fi
+}
+
 echo "Initializing submodules..."
 git submodule update --init --recursive --depth 1
 
 echo "Applying patches..."
 cd deps/micropython
-git apply ../../patches/micropython-machine_hw_spi-max-transfer-sz.patch
-git apply ../../patches/micropython-machine_hw_spi-no-dummy-flag.patch
+apply_patch ../../patches/micropython-machine_hw_spi-max-transfer-sz.patch
+apply_patch ../../patches/micropython-machine_hw_spi-no-dummy-flag.patch
 cd ../micropython-st7789
-git apply ../../patches/micropython-st7789-blit-buffer-size.patch
+apply_patch ../../patches/micropython-st7789-blit-buffer-size.patch
 
 echo "Configuring environment..."
 cd ../esp-idf
@@ -19,6 +33,7 @@ source ./export.sh
 
 echo "Compiling MicroPython..."
 cd ../micropython/ports/esp32
+idf.py -B build-prediktive fullclean
 idf.py -B build-prediktive \
   -D MICROPY_BOARD=ESP32_GENERIC \
   -D MICROPY_BOARD_VARIANT=SPIRAM \
