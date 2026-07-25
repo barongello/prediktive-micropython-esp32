@@ -345,6 +345,3 @@ git remote add origin git@github.com:barongello/prediktive-micropython-esp32.git
 
 git push -u origin main
 ```
-
-TODO
-- Update boot.py to write over the screen
