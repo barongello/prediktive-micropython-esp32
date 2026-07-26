@@ -388,6 +388,151 @@ b = 5
 result = prediktive_library.add(a, b)
 ```
 
+## Add button interrupt to control the LED
+
+Instead of keep polling the button's state to power on/off the LED, let's add an interrupt to it
+
+For this, we will need to modificate both, our driver and the Python module
+
+First, need to add some includes
+
+```c
+#include "py/mpthread.h"
+#include "esp_attr.h"
+```
+
+Then add the button callback variable
+
+```c
+static mp_obj_t button_callback = mp_const_none;
+
+MP_REGISTER_ROOT_POINTER(mp_obj_t button_callback);
+```
+
+The function that the scheduler will run
+
+```c
+static mp_obj_t button_callback_run(mp_obj_t arg)
+{
+  if (button_callback != mp_const_none)
+  {
+    mp_call_function_1(button_callback, arg);
+  }
+
+  return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_1(button_callback_run_obj, button_callback_run);
+```
+
+The interrupt handler that will schedule the task
+
+```c
+static void IRAM_ATTR button_isr_handler(void *arg)
+{
+  mp_sched_schedule(MP_OBJ_FROM_PTR(&button_callback_run_obj), mp_const_none);
+}
+```
+
+Change the button's pin configuration in `prediktive_driver_init` from
+
+```c
+    .intr_type = GPIO_INTR_DISABLE,
+```
+
+To
+
+```c
+    .intr_type = GPIO_INTR_NEGEDGE,
+```
+
+And add the handler (notice that the handler is removed first, to avoid adding it more than once)
+
+```c
+  // ...
+
+  gpio_config(&btn_conf);
+
+  esp_err_t err = gpio_install_isr_service(0);
+
+  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+  {
+    mp_raise_msg_varg(&mp_type_OSError,
+                      MP_ERROR_TEXT("failed to install GPIO ISR service: %d"), err);
+  }
+
+  gpio_isr_handler_remove(BUTTON_PIN);
+
+  err = gpio_isr_handler_add(BUTTON_PIN, button_isr_handler, NULL);
+
+  if (err != ESP_OK)
+  {
+    mp_raise_msg_varg(&mp_type_OSError,
+                      MP_ERROR_TEXT("failed to add GPIO ISR handler: %d"), err);
+  }
+
+  return mp_const_none;
+}
+```
+
+Then add a function to register the callback
+
+```c
+static mp_obj_t prediktive_driver_set_button_callback(mp_obj_t callback_obj)
+{
+  if (callback_obj != mp_const_none && !mp_obj_is_callable(callback_obj))
+  {
+    mp_raise_ValueError(MP_ERROR_TEXT("callback must be callable or None"));
+  }
+
+  button_callback = callback_obj;
+
+  return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_1(prediktive_driver_set_button_callback_obj, prediktive_driver_set_button_callback);
+```
+
+And register it in the `prediktive_driver_module_globals_table`
+
+```c
+    {MP_ROM_QSTR(MP_QSTR_set_button_callback), MP_ROM_PTR(&prediktive_driver_set_button_callback_obj)},
+```
+
+In the `prediktive_driver.py`, we need to add the new function
+
+```python
+def on_button_press(callback):
+    _prediktive_driver.set_button_callback(callback)
+```
+
+To use, let's add a debouncer
+
+```python
+import time
+import prediktive_driver
+
+button_last_press = 0
+led_state = False
+
+def button_handler(_):
+    global button_last_press
+    global led_state
+
+    now = time.ticks_ms()
+
+    if time.ticks_diff(now, button_last_press) < 200:
+        return
+
+    button_last_press = now
+
+    led_state = not led_state
+
+    prediktive_driver.set_led(led_state)
+
+prediktive_driver.on_button_press(button_handler)
+```
+
 ## Compile the firmware
 
 ```bash
@@ -436,6 +581,30 @@ from camera import Camera, FrameSize, PixelFormat
 import st7789
 import vga1_8x16
 import vga2_8x16
+import prediktive_driver
+import prediktive_library
+
+button_last_press = 0
+led_state = False
+
+def button_handler(_):
+    global button_last_press
+    global led_state
+
+    now = time.ticks_ms()
+
+    if time.ticks_diff(now, button_last_press) < 200:
+        return
+
+    button_last_press = now
+
+    led_state = not led_state
+
+    prediktive_driver.set_led(led_state)
+
+prediktive_driver.on_button_press(button_handler)
+
+prediktive_driver.set_led(False)
 
 print('Initializing ST7789 display...')
 
@@ -449,10 +618,10 @@ spi = SPI(
 )
 
 display = st7789.ST7789(
-    spi, 
+    spi,
     240, 320,
-    reset=Pin(2, Pin.OUT), 
-    dc=Pin(3, Pin.OUT), 
+    reset=Pin(2, Pin.OUT),
+    dc=Pin(3, Pin.OUT),
     cs=Pin(15, Pin.OUT),
     rotation=1
 )
@@ -466,7 +635,7 @@ print('Initializing camera...')
 try:
     cam = Camera(pixel_format=PixelFormat.RGB565, frame_size=FrameSize.QVGA)
 
-    time.sleep(2.0)                      
+    time.sleep(2.0)
 
     print('Camera initialized!')
 except Exception as e:
@@ -480,18 +649,18 @@ if cam:
     fps = 0
     fps_frames = 0
     fps_timer = 0
-    fps_last_frame_time = time.ticks_us()
+    fps_last_frame_time_ms = time.ticks_ms()
 
     while True:
-        fps_now = time.ticks_us()
-        fps_dt = fps_now - fps_last_frame_time
-        fps_last_frame_time = fps_now
+        fps_now_ms = time.ticks_ms()
+        fps_dt_ms = fps_now_ms - fps_last_frame_time_ms
+        fps_last_frame_time_ms = fps_now_ms
 
-        fps_frames += 1
-        fps_timer += fps_dt
+        fps_frames = prediktive_library.add(fps_frames, 1)
+        fps_timer += fps_dt_ms / 1000
         
-        if fps_timer >= 1000:
-            fps = fps_frames * 1000000 / fps_timer
+        if fps_timer >= 1:
+            fps = fps_frames / fps_timer
 
             fps_frames = 0
             fps_timer = 0
@@ -511,7 +680,7 @@ if cam:
                 print('capture: {} ms | blit: {} ms | frame time: {} ms | fps: {}'.format(
                     time.ticks_diff(t1, t0) / 1000,
                     time.ticks_diff(t2, t1) / 1000,
-                    fps_dt / 1000,
+                    fps_dt_ms,
                     fps
                 ))
             else:
@@ -525,8 +694,8 @@ if cam:
 
             time.sleep(0.5)
 
-        display.text(vga1_8x16, 'FPS: ', 10, 10, st7789.BLACK, st7789.WHITE)
-        display.text(vga2_8x16, '{}'.format(fps), 50, 10, st7789.BLACK, st7789.WHITE)
+        display.text(vga1_8x16, 'FPS: ', 10, 10, st7789.WHITE, st7789.BLACK)
+        display.text(vga2_8x16, '{}'.format(fps), 50, 10, st7789.WHITE, st7789.BLACK)
 ```
 
 We will notice flickering on the FPS text because we are calling `write_spi` three times: the camera buffer, the FPS text and the FPS value

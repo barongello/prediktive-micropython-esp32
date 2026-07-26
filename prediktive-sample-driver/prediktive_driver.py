@@ -7,3 +7,6 @@ def set_led(state):
 
 def read_button():
     return _prediktive_driver.button_read()
+
+def on_button_press(callback):
+    _prediktive_driver.set_button_callback(callback)
