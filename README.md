@@ -3,7 +3,7 @@
 ## Environment
 
 - ESP32-WROVER-KIT with OV2640 camera and ST7789 display
-- Omarchy + Python 3.14.6
+- Python 3.14.6 ("pure", not inside a virtual environment)
 - ESP-IDF v5.5.2
   - Git: https://github.com/espressif/esp-idf
   - Commit: `30aaf64524299d3bde422ca9a2848090d1bc5d0f`
