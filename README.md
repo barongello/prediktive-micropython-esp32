@@ -293,6 +293,101 @@ prediktive_driver.set_led(False) # Off
 prediktive_driver.read_button()  # True if pressed, False if not
 ```
 
+## Create prediktive_library
+
+Create the `prediktive-sample-library` with the following files and structure
+
+```
+prediktive-sample-library
+  micropython.cmake
+  prediktive_library.c
+  prediktive_library.py
+```
+
+Let's start with the `prediktive_library.c`
+
+```c
+#include "py/runtime.h"
+#include "py/obj.h"
+
+int add(int a, int b)
+{
+  return a + b;
+}
+
+static mp_obj_t prediktive_library_add(mp_obj_t a_obj, mp_obj_t b_obj)
+{
+  int a = mp_obj_get_int(a_obj);
+  int b = mp_obj_get_int(b_obj);
+  int result = add(a, b);
+
+  return mp_obj_new_int(result);
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_2(prediktive_library_add_obj, prediktive_library_add);
+
+static const mp_rom_map_elem_t prediktive_library_module_globals_table[] = {
+    {MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__prediktive_library)},
+    {MP_ROM_QSTR(MP_QSTR_add), MP_ROM_PTR(&prediktive_library_add_obj)},
+};
+
+static MP_DEFINE_CONST_DICT(prediktive_library_module_globals, prediktive_library_module_globals_table);
+
+const mp_obj_module_t prediktive_library_user_cmodule = {
+    .base = {&mp_type_module},
+    .globals = (mp_obj_dict_t *)&prediktive_library_module_globals,
+};
+
+MP_REGISTER_MODULE(MP_QSTR__prediktive_library, prediktive_library_user_cmodule);
+```
+
+Then the `prediktive_library.py` that will be frozen
+
+```python
+import _prediktive_library
+
+def add(a, b):
+    return _prediktive_library.add(a, b)
+```
+
+And the `micropython.cmake`
+
+```cmake
+add_library(usermod_prediktive_library INTERFACE)
+
+target_sources(usermod_prediktive_library INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}/prediktive_library.c
+)
+
+target_include_directories(usermod_prediktive_library INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}
+)
+
+target_link_libraries(usermod INTERFACE usermod_prediktive_library)
+```
+
+Then we need to update our `combined_modules.cmake` and add
+
+```cmake
+include(${CMAKE_CURRENT_LIST_DIR}/prediktive-sample-library/micropython.cmake)
+```
+
+And update our `manifest.py` to add
+
+```python
+freeze('prediktive-sample-library', 'prediktive_library.py')
+```
+
+To use the module inside MicroPython
+
+```python
+import prediktive_library
+
+a = 3
+b = 5
+result = prediktive_library.add(a, b)
+```
+
 ## Compile the firmware
 
 ```bash
