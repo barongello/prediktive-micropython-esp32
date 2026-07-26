@@ -151,7 +151,15 @@ set(MICROPY_FROZEN_MANIFEST ${CMAKE_CURRENT_LIST_DIR}/manifest.py CACHE STRING "
 
 From now onward, all other modules added to the project will need to have their `manifest.py` included in our main `manifest.py`, otherwise they will not have their frozen modules included
 
-## Create prediktive_driver
+## Custom drivers and libraries
+
+Let's showcase custom drivers and custom libraries. Here we will be creating a simple driver called `prediktive-sample-driver` to control a LED and a button and a simple library with an `add` function to sum integers
+
+Since MicroPython is staticaly linked, there is no `ctypes` usage here (which would be used in Linux spaces, like inside Raspbian OS in a Raspberry Pi)
+
+They will be created here as subfolders for the sake of the reader, but they should belong in their own repositories and added to this repository as dependency (as we did with ESP-IDF, MicroPython, OV2640 camera driver/module and ST7789 display driver/module)
+
+### Create prediktive_driver
 
 Create the `prediktive-sample-driver` with the following files and structure
 
@@ -293,7 +301,7 @@ prediktive_driver.set_led(False) # Off
 prediktive_driver.read_button()  # True if pressed, False if not
 ```
 
-## Create prediktive_library
+### Create prediktive_library
 
 Create the `prediktive-sample-library` with the following files and structure
 
